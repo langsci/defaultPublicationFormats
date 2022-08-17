@@ -55,7 +55,7 @@ class DefaultPublicationFormatsPlugin extends GenericPlugin
 		$publication = $submission->getCurrentPublication();
 
 		// define default publication formats
-		$defaultFormatsMap = array_reverse([
+		$defaultFormatsMap = [
 			'PDF' => 'DA',
 			'Bibliography' => 'DA',
 			'Hardcover' => 'BB',
@@ -63,16 +63,13 @@ class DefaultPublicationFormatsPlugin extends GenericPlugin
 			'Buy from Amazon.co.uk' => 'BC',
 			'Buy from Amazon.com' => 'BC',
 			'Collaborative reading on Paperhive' => 'DA'
-		]);
+		];
 
 		// get current publication formats
 		$publicationFormats = $publication->_data['publicationFormats'];
 		$currentPublicationFormatNames = array_map(function($v) {
 			return $v->getLocalizedName();
 		},$publicationFormats);
-
-		// get missing publication formats
-		$missingPublicationFormatNames = array_diff(array_keys($defaultFormatsMap), $currentPublicationFormatNames);
 
 		# delete all publication formats for this publication !!! only for debugging ""
 		if (false) {
@@ -82,30 +79,43 @@ class DefaultPublicationFormatsPlugin extends GenericPlugin
 		}
 
 		// create missing publication formats
-		foreach ($missingPublicationFormatNames as $missingPublicationFormatName) {
+		$seq = 1;
+		$missingPublicationFormatNames = [];
+		foreach (array_keys($defaultFormatsMap) as $defaultPublicationFormatName) {
 			$publicationFormatDao = DAORegistry::getDAO('PublicationFormatDAO'); /* @var $publicationFormatDao PublicationFormatDAO */
 			
-			$publicationFormat = $publicationFormatDao->newDataObject();
-			$publicationFormat->setData('publicationId', $publication->getId());
-			
-			$publicationFormat->setName([$publication->getData('locale') => $missingPublicationFormatName]);
-			$publicationFormat->setEntryKey($defaultFormatsMap[$missingPublicationFormatName]);
-			if ($missingPublicationFormatName == 'Hardcover') {
-				$publicationFormat->setPhysicalFormat(true);
-				$publicationFormat->setWidth(180);
-				$publicationFormat->setHeight(245);
-			} else {
-				$publicationFormat->setPhysicalFormat(false);
-			}
-			
-			$representationId = $publicationFormatDao->insertObject($publicationFormat);
+			if (!in_array($defaultPublicationFormatName, $currentPublicationFormatNames, true)) {
+				# create new publication format
 
-			// log the creation of the format.
-			import('lib.pkp.classes.log.SubmissionLog');
-			import('classes.log.SubmissionEventLogEntry');
-			SubmissionLog::logEvent(Application::get()->getRequest(), $submission, SUBMISSION_LOG_PUBLICATION_FORMAT_CREATE, 'submission.event.publicationFormatCreated', array('formatName' => $publicationFormat->getLocalizedName()));
+				$missingPublicationFormatNames[] = $defaultPublicationFormatName;
+
+				$publicationFormat = $publicationFormatDao->newDataObject();
+				$publicationFormat->setData('publicationId', $publication->getId());
+				$publicationFormat->setData('seq', $seq);
+				
+				$publicationFormat->setName([$publication->getData('locale') => $defaultPublicationFormatName]);
+				$publicationFormat->setEntryKey($defaultFormatsMap[$defaultPublicationFormatName]);
+				if ($defaultPublicationFormatName == 'Hardcover') {
+					$publicationFormat->setPhysicalFormat(true);
+					$publicationFormat->setWidth(180);
+					$publicationFormat->setHeight(245);
+				} else {
+					$publicationFormat->setPhysicalFormat(false);
+				}
+				
+				$representationId = $publicationFormatDao->insertObject($publicationFormat);
+
+				// log the creation of the format.
+				import('lib.pkp.classes.log.SubmissionLog');
+				import('classes.log.SubmissionEventLogEntry');
+				SubmissionLog::logEvent(Application::get()->getRequest(), $submission, SUBMISSION_LOG_PUBLICATION_FORMAT_CREATE, 'submission.event.publicationFormatCreated', array('formatName' => $publicationFormat->getLocalizedName()));
+			} else {
+				# set position of existing publication format
+				$publicationFormats[array_search($defaultPublicationFormatName, $currentPublicationFormatNames)]->setData('seq', $seq);
+			}
+			$seq = $seq + 1;
 		}
-		# store publication format anmes created by this plugin (can be used to removed them again in required)
+		# store publication format names created by this plugin (can be used to removed them again if required)
 		if ($missingPublicationFormatNames) {
 			$publication = Services::get('publication')->edit($publication, ['defaultPubFormatsCreated' => json_encode($missingPublicationFormatNames)], $request);
 		}
