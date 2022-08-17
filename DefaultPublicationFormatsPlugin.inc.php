@@ -111,7 +111,10 @@ class DefaultPublicationFormatsPlugin extends GenericPlugin
 				SubmissionLog::logEvent(Application::get()->getRequest(), $submission, SUBMISSION_LOG_PUBLICATION_FORMAT_CREATE, 'submission.event.publicationFormatCreated', array('formatName' => $publicationFormat->getLocalizedName()));
 			} else {
 				# set position of existing publication format
-				$publicationFormats[array_search($defaultPublicationFormatName, $currentPublicationFormatNames)]->setData('seq', $seq);
+				$publicationFormat = $publicationFormats[array_search($defaultPublicationFormatName, $currentPublicationFormatNames)];
+				$publicationFormat->setData('seq', $seq);
+
+				$representationId = $publicationFormatDao->updateObject($publicationFormat);
 			}
 			$seq = $seq + 1;
 		}
